@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
-import { db } from '@/db/index.js';
-import { authenticateToken } from '@/middleware/auth.js';
+import { db } from '../db/index.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -15,25 +15,25 @@ router.get('/stats', (_req: Request, res: Response): void => {
     .prepare('SELECT COUNT(*) as count FROM courses')
     .get() as { count: number }).count;
 
-  const totalEnrollments = (db
-    .prepare('SELECT COUNT(*) as count FROM enrollments')
+  const totalEnrolledPairs = (db
+    .prepare('SELECT COUNT(DISTINCT studentId || \'-\' || courseId) as count FROM learning_behaviors WHERE courseId IS NOT NULL')
     .get() as { count: number }).count;
 
-  const completedEnrollments = (db
-    .prepare("SELECT COUNT(*) as count FROM enrollments WHERE status = 'completed'")
+  const completedPairs = (db
+    .prepare('SELECT COUNT(DISTINCT studentId || \'-\' || courseId) as count FROM learning_behaviors WHERE courseId IS NOT NULL AND completed = 1')
     .get() as { count: number }).count;
 
-  const completionRate = totalEnrollments > 0
-    ? Math.round((completedEnrollments / totalEnrollments) * 1000) / 10
+  const completionRate = totalEnrolledPairs > 0
+    ? Math.round((completedPairs / totalEnrolledPairs) * 1000) / 10
     : 0;
 
   const totalExams = (db
-    .prepare('SELECT COUNT(*) as count FROM exam_attempts WHERE status = ?')
-    .get('submitted') as { count: number }).count;
+    .prepare('SELECT COUNT(*) as count FROM exam_attempts WHERE submittedAt IS NOT NULL')
+    .get() as { count: number }).count;
 
   const passedExams = (db
-    .prepare('SELECT COUNT(*) as count FROM exam_attempts WHERE status = ? AND isPassed = 1')
-    .get('submitted') as { count: number }).count;
+    .prepare('SELECT COUNT(*) as count FROM exam_attempts WHERE submittedAt IS NOT NULL AND passed = 1')
+    .get() as { count: number }).count;
 
   const passRate = totalExams > 0
     ? Math.round((passedExams / totalExams) * 1000) / 10
@@ -44,7 +44,7 @@ router.get('/stats', (_req: Request, res: Response): void => {
     .get() as { count: number }).count;
 
   const teacherStudentRatio = totalTeachers > 0
-    ? totalStudents / totalTeachers
+    ? Number((totalStudents / totalTeachers).toFixed(2))
     : 0;
 
   res.json({
@@ -63,30 +63,41 @@ router.get('/trend', (req: Request, res: Response): void => {
   const daysParam = req.query.days as string | undefined;
   const days = Math.min(90, Math.max(1, parseInt(daysParam || '7', 10)));
 
-  const results: Array<{ date: string; enrollments: number; completions: number; newUsers: number }> = [];
+  const results: Array<{
+    date: string;
+    newUsers: number;
+    newCourses: number;
+    learningActivities: number;
+    completedLessons: number;
+  }> = [];
 
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
     const dateStr = date.toISOString().slice(0, 10);
 
-    const enrollments = (db
-      .prepare('SELECT COUNT(*) as count FROM enrollments WHERE DATE(enrolledAt) = ?')
-      .get(dateStr) as { count: number }).count;
-
-    const completions = (db
-      .prepare("SELECT COUNT(*) as count FROM enrollments WHERE status = 'completed' AND DATE(completedAt) = ?")
-      .get(dateStr) as { count: number }).count;
-
     const newUsers = (db
       .prepare('SELECT COUNT(*) as count FROM users WHERE DATE(createdAt) = ?')
       .get(dateStr) as { count: number }).count;
 
+    const newCourses = (db
+      .prepare('SELECT COUNT(*) as count FROM courses WHERE DATE(createdAt) = ?')
+      .get(dateStr) as { count: number }).count;
+
+    const learningActivities = (db
+      .prepare('SELECT COUNT(*) as count FROM learning_behaviors WHERE DATE(createdAt) = ?')
+      .get(dateStr) as { count: number }).count;
+
+    const completedLessons = (db
+      .prepare('SELECT COUNT(*) as count FROM learning_behaviors WHERE DATE(createdAt) = ? AND completed = 1')
+      .get(dateStr) as { count: number }).count;
+
     results.push({
       date: dateStr,
-      enrollments,
-      completions,
-      newUsers
+      newUsers,
+      newCourses,
+      learningActivities,
+      completedLessons
     });
   }
 
@@ -100,16 +111,21 @@ router.get('/subject-distribution', (_req: Request, res: Response): void => {
   const rows = db.prepare(`
     SELECT
       COALESCE(subject, '未分类') as subject,
-      COUNT(*) as courseCount,
-      COALESCE(SUM(enrolledCount), 0) as studentCount
+      COUNT(*) as courseCount
     FROM courses
     GROUP BY subject
     ORDER BY courseCount DESC
-  `).all() as Array<{ subject: string; courseCount: number; studentCount: number }>;
+  `).all() as Array<{ subject: string; courseCount: number }>;
+
+  const total = rows.reduce((sum, r) => sum + r.courseCount, 0);
+  const data = rows.map(r => ({
+    ...r,
+    percentage: total > 0 ? Math.round((r.courseCount / total) * 1000) / 10 : 0
+  }));
 
   res.json({
     success: true,
-    data: rows
+    data
   });
 });
 
@@ -125,13 +141,13 @@ router.get('/monthly-exam-pass', (_req: Request, res: Response): void => {
 
     const total = (db
       .prepare(
-        "SELECT COUNT(*) as count FROM exam_attempts WHERE status = 'submitted' AND strftime('%Y-%m', submittedAt) = ?"
+        "SELECT COUNT(*) as count FROM exam_attempts WHERE submittedAt IS NOT NULL AND strftime('%Y-%m', submittedAt) = ?"
       )
       .get(monthStr) as { count: number }).count;
 
     const passed = (db
       .prepare(
-        "SELECT COUNT(*) as count FROM exam_attempts WHERE status = 'submitted' AND isPassed = 1 AND strftime('%Y-%m', submittedAt) = ?"
+        "SELECT COUNT(*) as count FROM exam_attempts WHERE submittedAt IS NOT NULL AND passed = 1 AND strftime('%Y-%m', submittedAt) = ?"
       )
       .get(monthStr) as { count: number }).count;
 

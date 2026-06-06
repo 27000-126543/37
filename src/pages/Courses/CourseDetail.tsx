@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft,
   BookOpen,
@@ -90,11 +90,16 @@ const stepStatusMap = {
 export default function CourseDetail() {
   const navigate = useNavigate();
   const { id = '' } = useParams<{ id: string }>();
-  const { getCourseById, users } = useAppStore();
+  const { courses, users, fetchCourses, fetchUsers } = useAppStore();
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabKey>('chapters');
 
-  const course = useMemo(() => getCourseById(id), [id, getCourseById]);
+  useEffect(() => {
+    fetchCourses();
+    fetchUsers();
+  }, [fetchCourses, fetchUsers]);
+
+  const course = useMemo(() => courses.find((c) => c.id === id), [courses, id]);
 
   const canEdit = useMemo(() => {
     if (!user) return false;

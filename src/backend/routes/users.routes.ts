@@ -1,92 +1,66 @@
 import { Router, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { db } from '@/db/index.js';
-import { authenticateToken, requireRole } from '@/middleware/auth.js';
+import { db } from '../db/index.js';
+import { authenticateToken } from '../middleware/auth.js';
+import { requireRole } from '../middleware/permission.js';
+import type { User, UserRole, UserStatus, PaginatedResult } from '../types/index.js';
 
 const router = Router();
 
 interface DbUser {
   id: string;
-  username: string;
-  name: string | null;
-  realName: string | null;
-  password: string;
   role: string;
-  avatar: string | null;
+  username: string;
+  password: string;
+  realName: string | null;
   email: string | null;
   phone: string | null;
-  department: string | null;
-  title: string | null;
-  registeredAt: string | null;
-  createdAt: string | null;
-  lastLoginAt: string | null;
+  avatar: string | null;
   status: string;
-  profile: string | null;
+  createdAt: string;
 }
 
 interface CreateUserRequest {
   username: string;
   password?: string;
-  name?: string;
+  role?: UserRole;
   realName?: string;
-  role?: string;
-  avatar?: string;
   email?: string;
   phone?: string;
-  department?: string;
-  title?: string;
-  status?: 'active' | 'inactive' | 'disabled';
-  profile?: Record<string, unknown>;
+  avatar?: string;
+  status?: UserStatus;
 }
 
 interface UpdateUserRequest {
-  name?: string;
+  role?: UserRole;
   realName?: string;
-  role?: string;
-  avatar?: string;
   email?: string;
   phone?: string;
-  department?: string;
-  title?: string;
-  status?: 'active' | 'inactive' | 'disabled';
-  profile?: Record<string, unknown>;
+  avatar?: string;
+  status?: UserStatus;
 }
 
 interface UpdateStatusRequest {
-  status: 'active' | 'inactive' | 'disabled';
+  status: UserStatus;
 }
 
-const formatUser = (row: DbUser): Record<string, unknown> => {
-  let parsedProfile: Record<string, unknown> | null = null;
-  if (row.profile) {
-    try {
-      parsedProfile = JSON.parse(row.profile) as Record<string, unknown>;
-    } catch {
-      parsedProfile = null;
-    }
-  }
+const formatUser = (row: DbUser): Omit<User, 'password'> => {
   return {
     id: row.id,
+    role: row.role as User['role'],
     username: row.username,
-    name: row.name,
     realName: row.realName,
-    role: row.role,
-    avatar: row.avatar,
     email: row.email,
     phone: row.phone,
-    department: row.department,
-    title: row.title,
-    registeredAt: row.registeredAt,
-    createdAt: row.createdAt,
-    lastLoginAt: row.lastLoginAt,
-    status: row.status,
-    profile: parsedProfile
+    avatar: row.avatar,
+    status: row.status as User['status'],
+    createdAt: row.createdAt
   };
 };
 
 router.use(authenticateToken);
-router.use(requireRole(['admin']));
+router.use(requireRole('admin'));
 
 router.get('/', (req: Request, res: Response): void => {
   const { role, page = '1', pageSize = '20' } = req.query as {
@@ -111,22 +85,22 @@ router.get('/', (req: Request, res: Response): void => {
   const totalResult = db.prepare(countSql).get(...params) as { total: number };
   const total = totalResult.total;
 
-  const sql = `SELECT * FROM users ${whereClause} ORDER BY createdAt DESC LIMIT ? OFFSET ?`;
+  const sql = `SELECT id, role, username, realName, email, phone, avatar, status, createdAt FROM users ${whereClause} ORDER BY createdAt DESC LIMIT ? OFFSET ?`;
   const rows = db.prepare(sql).all(...params, limit, offset) as DbUser[];
 
   const users = rows.map(formatUser);
 
+  const result: PaginatedResult<Omit<User, 'password'>> = {
+    items: users,
+    total,
+    page: pageNum,
+    pageSize: limit,
+    totalPages: Math.ceil(total / limit)
+  };
+
   res.json({
     success: true,
-    data: {
-      users,
-      pagination: {
-        page: pageNum,
-        pageSize: limit,
-        total,
-        totalPages: Math.ceil(total / limit)
-      }
-    }
+    data: result
   });
 });
 
@@ -152,29 +126,26 @@ router.post('/', (req: Request, res: Response): void => {
   const now = new Date().toISOString();
 
   const sql = `
-    INSERT INTO users (id, username, name, realName, password, role, avatar, email, phone, department, title, registeredAt, createdAt, status, profile)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (id, role, username, password, realName, email, phone, avatar, status, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   db.prepare(sql).run(
     id,
-    body.username,
-    body.name || null,
-    body.realName || null,
-    hashedPassword,
     role,
-    body.avatar || null,
+    body.username,
+    hashedPassword,
+    body.realName || null,
     body.email || null,
     body.phone || null,
-    body.department || null,
-    body.title || null,
-    now,
-    now,
+    body.avatar || null,
     status,
-    body.profile ? JSON.stringify(body.profile) : null
+    now
   );
 
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as DbUser;
+  const user = db
+    .prepare('SELECT id, role, username, realName, email, phone, avatar, status, createdAt FROM users WHERE id = ?')
+    .get(id) as DbUser;
 
   res.status(201).json({
     success: true,
@@ -183,7 +154,7 @@ router.post('/', (req: Request, res: Response): void => {
 });
 
 router.put('/:id', (req: Request, res: Response): void => {
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
   const body = req.body as UpdateUserRequest;
 
   const existing = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
@@ -195,27 +166,25 @@ router.put('/:id', (req: Request, res: Response): void => {
   const fields: string[] = [];
   const values: Array<string | null> = [];
 
-  if (body.name !== undefined) { fields.push('name = ?'); values.push(body.name || null); }
-  if (body.realName !== undefined) { fields.push('realName = ?'); values.push(body.realName || null); }
   if (body.role !== undefined) { fields.push('role = ?'); values.push(body.role); }
-  if (body.avatar !== undefined) { fields.push('avatar = ?'); values.push(body.avatar || null); }
+  if (body.realName !== undefined) { fields.push('realName = ?'); values.push(body.realName || null); }
   if (body.email !== undefined) { fields.push('email = ?'); values.push(body.email || null); }
   if (body.phone !== undefined) { fields.push('phone = ?'); values.push(body.phone || null); }
-  if (body.department !== undefined) { fields.push('department = ?'); values.push(body.department || null); }
-  if (body.title !== undefined) { fields.push('title = ?'); values.push(body.title || null); }
+  if (body.avatar !== undefined) { fields.push('avatar = ?'); values.push(body.avatar || null); }
   if (body.status !== undefined) { fields.push('status = ?'); values.push(body.status); }
-  if (body.profile !== undefined) { fields.push('profile = ?'); values.push(body.profile ? JSON.stringify(body.profile) : null); }
 
   if (fields.length === 0) {
     res.status(400).json({ success: false, message: '没有需要更新的字段' });
     return;
   }
 
-  values.push(id);
+  values.push(id as string);
   const sql = `UPDATE users SET ${fields.join(', ')} WHERE id = ?`;
   db.prepare(sql).run(...values);
 
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as DbUser;
+  const user = db
+    .prepare('SELECT id, role, username, realName, email, phone, avatar, status, createdAt FROM users WHERE id = ?')
+    .get(id) as DbUser;
 
   res.json({
     success: true,
@@ -224,7 +193,7 @@ router.put('/:id', (req: Request, res: Response): void => {
 });
 
 router.delete('/:id', (req: Request, res: Response): void => {
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
 
   const existing = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
   if (!existing) {
@@ -241,10 +210,10 @@ router.delete('/:id', (req: Request, res: Response): void => {
 });
 
 router.patch('/:id/status', (req: Request, res: Response): void => {
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
   const { status } = req.body as UpdateStatusRequest;
 
-  const validStatuses = ['active', 'inactive', 'disabled'];
+  const validStatuses: UserStatus[] = ['active', 'inactive', 'disabled'];
   if (!validStatuses.includes(status)) {
     res.status(400).json({ success: false, message: '无效的状态值' });
     return;
@@ -257,7 +226,9 @@ router.patch('/:id/status', (req: Request, res: Response): void => {
   }
 
   db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, id);
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as DbUser;
+  const user = db
+    .prepare('SELECT id, role, username, realName, email, phone, avatar, status, createdAt FROM users WHERE id = ?')
+    .get(id) as DbUser;
 
   res.json({
     success: true,
@@ -266,7 +237,7 @@ router.patch('/:id/status', (req: Request, res: Response): void => {
 });
 
 router.post('/:id/reset-password', (req: Request, res: Response): void => {
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
 
   const existing = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
   if (!existing) {

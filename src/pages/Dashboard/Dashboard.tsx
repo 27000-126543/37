@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Users,
   BookOpen,
@@ -165,6 +165,13 @@ export default function Dashboard() {
   const user = useAuthStore((s) => s.user);
   const stats = useAppStore((s) => s.dashboardStats);
   const users = useAppStore((s) => s.users);
+  const fetchDashboardStats = useAppStore((s) => s.fetchDashboardStats);
+  const fetchUsers = useAppStore((s) => s.fetchUsers);
+
+  useEffect(() => {
+    fetchDashboardStats();
+    fetchUsers();
+  }, [fetchDashboardStats, fetchUsers]);
 
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [startDate, setStartDate] = useState('2025-05-31');

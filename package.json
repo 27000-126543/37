@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:server": "tsx watch src/api/server.ts",
+    "dev:server": "tsx watch src/backend/server.ts",
     "dev:all": "concurrently -k -n CLIENT,SERVER -c cyan,magenta \"npm:dev\" \"npm:dev:server\"",
     "build": "tsc -b && vite build",
     "build:server": "tsc -p tsconfig.server.json",
@@ -15,7 +15,7 @@
     "check": "tsc -b --noEmit",
     "check:server": "tsc -p tsconfig.server.json --noEmit",
     "start:server": "node dist/server/server.js",
-    "seed": "tsx src/api/db/seed.ts"
+    "seed": "tsx src/backend/db/seed.ts"
   },
   "dependencies": {
     "axios": "^1.17.0",

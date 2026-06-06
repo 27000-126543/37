@@ -1,46 +1,35 @@
 import { Router, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { db } from '@/db/index.js';
-import { authenticateToken, JWT_SECRET, JWT_EXPIRES_IN } from '@/middleware/auth.js';
+import { db } from '../db/index.js';
+import { authenticateToken, JWT_SECRET, JWT_EXPIRES_IN } from '../middleware/auth.js';
+import type { User, JwtPayload as JwtPayloadType } from '../types/index.js';
 
 const router = Router();
 
 interface DbUserWithPassword {
   id: string;
-  username: string;
-  name: string | null;
-  realName: string | null;
-  password: string;
   role: string;
-  avatar: string | null;
+  username: string;
+  password: string;
+  realName: string | null;
   email: string | null;
   phone: string | null;
-  department: string | null;
-  title: string | null;
-  registeredAt: string | null;
-  createdAt: string | null;
-  lastLoginAt: string | null;
+  avatar: string | null;
   status: string;
-  profile: string | null;
+  createdAt: string;
 }
 
 interface DbUser {
   id: string;
-  username: string;
-  name: string | null;
-  realName: string | null;
   role: string;
-  avatar: string | null;
+  username: string;
+  realName: string | null;
   email: string | null;
   phone: string | null;
-  department: string | null;
-  title: string | null;
-  registeredAt: string | null;
-  createdAt: string | null;
-  lastLoginAt: string | null;
+  avatar: string | null;
   status: string;
-  profile: string | null;
+  createdAt: string;
 }
 
 interface LoginRequest {
@@ -48,31 +37,17 @@ interface LoginRequest {
   password: string;
 }
 
-const formatUser = (row: DbUser): Record<string, unknown> => {
-  let parsedProfile: Record<string, unknown> | null = null;
-  if (row.profile) {
-    try {
-      parsedProfile = JSON.parse(row.profile) as Record<string, unknown>;
-    } catch {
-      parsedProfile = null;
-    }
-  }
+const formatUser = (row: DbUser): Omit<User, 'password'> => {
   return {
     id: row.id,
+    role: row.role as User['role'],
     username: row.username,
-    name: row.name,
     realName: row.realName,
-    role: row.role,
-    avatar: row.avatar,
     email: row.email,
     phone: row.phone,
-    department: row.department,
-    title: row.title,
-    registeredAt: row.registeredAt,
-    createdAt: row.createdAt,
-    lastLoginAt: row.lastLoginAt,
-    status: row.status,
-    profile: parsedProfile
+    avatar: row.avatar,
+    status: row.status as User['status'],
+    createdAt: row.createdAt
   };
 };
 
@@ -104,13 +79,13 @@ router.post('/login', (req: Request, res: Response): void => {
     return;
   }
 
-  const token = jwt.sign(
-    { userId: user.id, username: user.username, role: user.role },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
-  );
+  const payload: JwtPayloadType = {
+    id: user.id,
+    username: user.username,
+    role: user.role as JwtPayloadType['role']
+  };
 
-  db.prepare('UPDATE users SET lastLoginAt = datetime(\'now\') WHERE id = ?').run(user.id);
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] });
 
   res.cookie('token', token, {
     httpOnly: true,
@@ -119,14 +94,11 @@ router.post('/login', (req: Request, res: Response): void => {
     maxAge: 7 * 24 * 60 * 60 * 1000
   });
 
-  const userData = formatUser(user);
-  delete (userData as Record<string, unknown>).password;
-
   res.json({
     success: true,
     data: {
       token,
-      user: userData
+      user: formatUser(user)
     }
   });
 });
@@ -151,7 +123,7 @@ router.get('/me', authenticateToken, (req: Request, res: Response): void => {
   }
 
   const user = db
-    .prepare('SELECT * FROM users WHERE id = ?')
+    .prepare('SELECT id, role, username, realName, email, phone, avatar, status, createdAt FROM users WHERE id = ?')
     .get(req.user.id) as DbUser | undefined;
 
   if (!user) {

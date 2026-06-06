@@ -27,7 +27,7 @@ const statCards = [
 ];
 
 export default function ProfilePage() {
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const [activeSection, setActiveSection] = useState<'info' | 'password'>('info');
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);

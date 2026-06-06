@@ -167,6 +167,7 @@ export function initDatabase(database?: Database): void {
       startTime TEXT,
       endTime TEXT,
       status TEXT NOT NULL DEFAULT 'draft',
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (courseId) REFERENCES courses(id) ON DELETE CASCADE
     );
 

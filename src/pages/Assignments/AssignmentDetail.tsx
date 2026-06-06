@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   ChevronLeft,
   FileText,
@@ -24,33 +24,55 @@ import {
   Textarea,
   Input,
 } from '@/components/ui';
-import { mockAssignments, mockAssignmentSubmissions, mockCourses, mockUsers } from '@/data';
-import { useAuthStore } from '@/store';
-import type { Question as CourseQuestion } from '@/data/mockCourses';
+import { useAppStore, useAuthStore } from '@/store';
+import { useParams } from 'react-router-dom';
+import type { Question as CourseQuestion } from '@/types';
 import { cn } from '@/lib/utils';
 
 export default function AssignmentDetail() {
   const { user } = useAuthStore();
-  const assignment = mockAssignments[0];
-  const course = mockCourses.find((c) => c.id === assignment.courseId);
+  const { id = '' } = useParams<{ id: string }>();
+  const {
+    assignments,
+    courses,
+    assignmentSubmissions,
+    users,
+    fetchAssignments,
+    fetchCourses,
+    fetchAssignmentSubmissions,
+    fetchUsers,
+  } = useAppStore();
 
   const isStudent = user?.role === 'student';
   const isTeacher = user?.role === 'teacher' || user?.role === 'assistant';
 
+  useEffect(() => {
+    fetchAssignments();
+    fetchCourses();
+    fetchUsers();
+    if (id) fetchAssignmentSubmissions(id);
+  }, [fetchAssignments, fetchCourses, fetchAssignmentSubmissions, fetchUsers, id]);
+
+  const assignment = useMemo(() => assignments.find((a) => a.id === id) || assignments[0], [assignments, id]);
+  const course = useMemo(() => courses.find((c) => c.id === assignment?.courseId), [courses, assignment?.courseId]);
+
   const studentSubmission = useMemo(() => {
-    return mockAssignmentSubmissions.find(
+    if (!assignment) return undefined;
+    return assignmentSubmissions.find(
       (s) => (s.studentId === user?.id || s.userId === user?.id) && s.assignmentId === assignment.id,
     );
-  }, [user?.id, assignment.id]);
+  }, [user?.id, assignment?.id, assignmentSubmissions]);
 
   const allSubmissions = useMemo(() => {
-    return mockAssignmentSubmissions.filter((s) => s.assignmentId === assignment.id);
-  }, [assignment.id]);
+    if (!assignment) return [];
+    return assignmentSubmissions.filter((s) => s.assignmentId === assignment.id);
+  }, [assignment?.id, assignmentSubmissions]);
 
   const questions = useMemo(() => {
-    if (!course) return [];
-    return assignment.questions
-      ?.map((q) => course.questions.find((cq) => cq.id === q.questionId))
+    if (!course || !assignment) return [];
+    const courseQuestions = (course as any).questions || [];
+    return (assignment.questions || [])
+      ?.map((q: any) => courseQuestions.find((cq: any) => cq.id === q.questionId))
       .filter(Boolean) as CourseQuestion[];
   }, [assignment, course]);
 
@@ -170,6 +192,17 @@ export default function AssignmentDetail() {
   const gradingTime = getGradingTimeRemaining();
   const scores = calculateTotalScore();
 
+  if (!assignment) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="p-12 text-center">
+          <FileText className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+          <p className="text-slate-400">作业不存在</p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50 dark:from-surface-darker dark:via-surface-dark dark:to-surface-darker p-6">
       <div className="mx-auto max-w-5xl">
@@ -237,7 +270,7 @@ export default function AssignmentDetail() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <User className="h-5 w-5" />
-                    学员: {mockUsers.find((u) => u.id === allSubmissions[0].studentId || u.id === allSubmissions[0].userId)?.name || '未知'}
+                    学员: {users.find((u) => u.id === allSubmissions[0].studentId || u.id === allSubmissions[0].userId)?.name || '未知'}
                   </CardTitle>
                   <div className="flex items-center gap-4">
                     <div className="text-center">

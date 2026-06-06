@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   FileText,
   Clock,
@@ -28,13 +28,7 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui';
-import {
-  mockAssignments,
-  mockAssignmentSubmissions,
-  mockCourses,
-  mockUsers,
-} from '@/data';
-import { useAuthStore } from '@/store';
+import { useAppStore, useAuthStore } from '@/store';
 import type { Assignment } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -42,36 +36,42 @@ type TabValue = 'all' | 'pending_submit' | 'pending_grade' | 'completed';
 
 export default function AssignmentList() {
   const { user } = useAuthStore();
+  const { assignments, courses, assignmentSubmissions, fetchAssignments, fetchCourses, fetchAssignmentSubmissions } = useAppStore();
   const [activeTab, setActiveTab] = useState<TabValue>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   const isStudent = user?.role === 'student';
   const isTeacher = user?.role === 'teacher' || user?.role === 'assistant';
 
+  useEffect(() => {
+    fetchAssignments();
+    fetchCourses();
+  }, [fetchAssignments, fetchCourses]);
+
   const courseMap = useMemo(() => {
     const map: Record<string, string> = {};
-    mockCourses.forEach((c) => (map[c.id] = c.title));
+    courses.forEach((c) => (map[c.id] = c.title));
     return map;
-  }, []);
+  }, [courses]);
 
   const studentSubmissionsMap = useMemo(() => {
-    const map: Record<string, typeof mockAssignmentSubmissions[number]> = {};
+    const map: Record<string, any> = {};
     if (isStudent) {
-      mockAssignmentSubmissions
+      assignmentSubmissions
         .filter((s) => s.studentId === user?.id || s.userId === user?.id)
         .forEach((s) => (map[s.assignmentId] = s));
     }
     return map;
-  }, [isStudent, user?.id]);
+  }, [isStudent, user?.id, assignmentSubmissions]);
 
   const allSubmissionsMap = useMemo(() => {
-    const map: Record<string, typeof mockAssignmentSubmissions> = {};
-    mockAssignmentSubmissions.forEach((s) => {
+    const map: Record<string, any[]> = {};
+    assignmentSubmissions.forEach((s) => {
       if (!map[s.assignmentId]) map[s.assignmentId] = [];
       map[s.assignmentId].push(s);
     });
     return map;
-  }, []);
+  }, [assignmentSubmissions]);
 
   const getStudentStatus = (assignment: Assignment) => {
     const submission = studentSubmissionsMap[assignment.id];
@@ -104,7 +104,7 @@ export default function AssignmentList() {
   };
 
   const filteredAssignments = useMemo(() => {
-    return mockAssignments.filter((a) => {
+    return assignments.filter((a) => {
       const matchesSearch =
         a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (courseMap[a.courseId] || '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -126,7 +126,7 @@ export default function AssignmentList() {
       }
       return true;
     });
-  }, [activeTab, searchQuery, courseMap, isStudent]);
+  }, [activeTab, searchQuery, courseMap, isStudent, assignments, getStudentStatus, getTeacherStatus]);
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-';
@@ -163,14 +163,14 @@ export default function AssignmentList() {
           {[
             {
               label: '全部作业',
-              count: mockAssignments.length,
+              count: assignments.length,
               icon: FileText,
               color: 'text-primary-600',
               bg: 'bg-primary-100 dark:bg-primary-900',
             },
             {
               label: isStudent ? '待提交' : '暂无提交',
-              count: mockAssignments.filter((a) =>
+              count: assignments.filter((a) =>
                 isStudent
                   ? getStudentStatus(a).label === '待提交'
                   : getTeacherStatus(a).label === '暂无提交',
@@ -181,7 +181,7 @@ export default function AssignmentList() {
             },
             {
               label: '待批改',
-              count: mockAssignments.filter((a) =>
+              count: assignments.filter((a) =>
                 isStudent
                   ? getStudentStatus(a).label === '待批改'
                   : getTeacherStatus(a).label.includes('待批改'),
@@ -192,7 +192,7 @@ export default function AssignmentList() {
             },
             {
               label: '已完成',
-              count: mockAssignments.filter((a) =>
+              count: assignments.filter((a) =>
                 isStudent
                   ? getStudentStatus(a).label === '已通过' || getStudentStatus(a).label === '未通过'
                   : getTeacherStatus(a).label === '全部批改完成',
@@ -311,10 +311,10 @@ export default function AssignmentList() {
 }
 
 interface AssignmentTableProps {
-  assignments: typeof mockAssignments;
+  assignments: Assignment[];
   courseMap: Record<string, string>;
-  studentSubmissionsMap: Record<string, typeof mockAssignmentSubmissions[number]>;
-  allSubmissionsMap: Record<string, typeof mockAssignmentSubmissions>;
+  studentSubmissionsMap: Record<string, any>;
+  allSubmissionsMap: Record<string, any[]>;
   isStudent: boolean;
   isTeacher: boolean;
   getStudentStatus: (a: Assignment) => { label: string; variant: 'default' | 'secondary' | 'success' | 'warning' | 'danger' | 'outline'; icon: typeof FileText };

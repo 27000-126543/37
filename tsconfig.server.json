@@ -1,21 +1,21 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "outDir": "./dist/server",
-    "rootDir": "./src/api",
+    "rootDir": "./src/backend",
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/api/*"]
+      "@/*": ["./src/backend/*"]
     }
   },
-  "include": ["src/api/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/**/*.tsx", "src/**/*.ts"]
+  "include": ["src/backend/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/**/*.tsx", "src/services/**/*"]
 }

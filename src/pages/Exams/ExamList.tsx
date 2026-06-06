@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   FileText,
   Clock,
@@ -32,8 +32,7 @@ import {
   TabsTrigger,
   TabsContent,
 } from '@/components/ui';
-import { mockExams, mockExamAttempts, mockCourses } from '@/data';
-import { useAuthStore } from '@/store';
+import { useAppStore, useAuthStore } from '@/store';
 import type { Exam } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -41,22 +40,29 @@ type TabValue = 'all' | 'not_started' | 'in_progress' | 'ended';
 
 export default function ExamList() {
   const { user } = useAuthStore();
+  const { exams, courses, examAttempts, fetchExams, fetchCourses, fetchExamAttempts } = useAppStore();
   const [activeTab, setActiveTab] = useState<TabValue>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  useEffect(() => {
+    fetchExams();
+    fetchCourses();
+    if (user?.id) fetchExamAttempts({ studentId: user.id });
+  }, [fetchExams, fetchCourses, fetchExamAttempts, user?.id]);
+
   const courseMap = useMemo(() => {
     const map: Record<string, string> = {};
-    mockCourses.forEach((c) => (map[c.id] = c.title));
+    courses.forEach((c) => (map[c.id] = c.title));
     return map;
-  }, []);
+  }, [courses]);
 
   const userAttemptsMap = useMemo(() => {
-    const map: Record<string, typeof mockExamAttempts[number]> = {};
-    mockExamAttempts
+    const map: Record<string, any> = {};
+    examAttempts
       .filter((a) => a.userId === user?.id)
       .forEach((a) => (map[a.examId] = a));
     return map;
-  }, [user?.id]);
+  }, [user?.id, examAttempts]);
 
   const getExamStatus = (exam: Exam) => {
     const attempt = userAttemptsMap[exam.id];
@@ -89,7 +95,7 @@ export default function ExamList() {
   };
 
   const filteredExams = useMemo(() => {
-    return mockExams.filter((e) => {
+    return exams.filter((e) => {
       const matchesSearch =
         e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (courseMap[e.courseId] || '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -104,7 +110,7 @@ export default function ExamList() {
 
       return true;
     });
-  }, [activeTab, searchQuery, courseMap]);
+  }, [activeTab, searchQuery, courseMap, exams, getExamStatus]);
 
   const formatDateTime = (dateStr?: string) => {
     if (!dateStr) return '-';
@@ -124,7 +130,7 @@ export default function ExamList() {
   };
 
   const getStatusCount = (tab: TabValue) => {
-    return mockExams.filter((e) => {
+    return exams.filter((e) => {
       const status = getExamStatus(e);
       if (tab === 'all') return true;
       if (tab === 'not_started') return status.label === '未开始' || status.label === '未发布';

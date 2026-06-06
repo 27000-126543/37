@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Users,
   Search,
@@ -19,9 +19,8 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { useAuthStore } from '@/store';
-import { mockUsers } from '@/data';
-import type { UserRole } from '@/types';
+import { useAuthStore, useAppStore } from '@/store';
+import type { User as UserType, UserRole } from '@/types';
 import { cn } from '@/lib/utils';
 
 type RoleFilter = 'all' | UserRole;
@@ -75,6 +74,7 @@ const emptyFormData: UserFormData = {
 
 export default function UserManage() {
   const { user: currentUser } = useAuthStore();
+  const { fetchUsers, users: allUsers } = useAppStore();
   const [searchText, setSearchText] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [showUserModal, setShowUserModal] = useState(false);
@@ -83,13 +83,17 @@ export default function UserManage() {
   const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
 
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
   const isAdmin = currentUser?.role === 'admin';
 
-  const users = mockUsers.filter((u) => {
+  const users = allUsers.filter((u) => {
     const matchesSearch =
-      u.name.toLowerCase().includes(searchText.toLowerCase()) ||
+      (u.name || '').toLowerCase().includes(searchText.toLowerCase()) ||
       u.username.toLowerCase().includes(searchText.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchText.toLowerCase());
+      (u.email || '').toLowerCase().includes(searchText.toLowerCase());
     const matchesRole = roleFilter === 'all' || u.role === roleFilter;
     return matchesSearch && matchesRole;
   });
@@ -100,7 +104,7 @@ export default function UserManage() {
     setShowUserModal(true);
   };
 
-  const handleEditUser = (user: typeof mockUsers[number]) => {
+  const handleEditUser = (user: UserType) => {
     setEditingUser({
       id: user.id,
       username: user.username,

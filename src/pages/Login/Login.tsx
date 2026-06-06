@@ -75,7 +75,7 @@ export default function Login() {
     setCaptchaInput('');
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -98,16 +98,20 @@ export default function Login() {
     }
 
     setLoading(true);
-    setTimeout(() => {
-      const user = login(username.trim(), activeRole);
-      if (user) {
+    try {
+      const success = await login(username.trim(), password, activeRole);
+      if (success) {
         navigate('/dashboard', { replace: true });
       } else {
         setError('账号或密码错误');
         handleRefreshCaptcha();
       }
+    } catch (err) {
+      setError('登录失败，请稍后重试');
+      handleRefreshCaptcha();
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   };
 
   const handleDemoLogin = (role: UserRole) => {

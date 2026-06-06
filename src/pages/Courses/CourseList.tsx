@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   Filter,
@@ -30,8 +30,13 @@ const statusMap: Record<CourseStatus, { label: string; className: string }> = {
 
 export default function CourseList() {
   const navigate = useNavigate();
-  const { courses, users } = useAppStore();
+  const { courses, users, fetchCourses, fetchUsers } = useAppStore();
   const { user } = useAuthStore();
+
+  useEffect(() => {
+    fetchCourses();
+    fetchUsers();
+  }, [fetchCourses, fetchUsers]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('全部');
   const [selectedStatus, setSelectedStatus] = useState<string>('全部');

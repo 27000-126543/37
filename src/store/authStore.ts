@@ -1,17 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User, UserRole } from '@/types';
-import { mockUsers } from '@/data/mockUsers';
-
-interface AuthState {
-  user: User | null;
-  users: User[];
-  isAuthenticated: boolean;
-  login: (username: string, role?: UserRole) => boolean;
-  logout: () => void;
-  switchRole: (role: UserRole) => void;
-  canAccess: (allowedRoles: UserRole[]) => boolean;
-}
+import { auth } from '@/services/api';
 
 const rolePriority: Record<UserRole, number> = {
   admin: 5,
@@ -24,28 +14,61 @@ const rolePriority: Record<UserRole, number> = {
   guest: 0,
 };
 
+interface AuthState {
+  user: User | null;
+  token: string | null;
+  users: User[];
+  isAuthenticated: boolean;
+  login: (username: string, password: string, role?: UserRole) => Promise<boolean>;
+  logout: () => Promise<void>;
+  getCurrentUser: () => Promise<User | null>;
+  switchRole: (role: UserRole) => void;
+  canAccess: (allowedRoles: UserRole[]) => boolean;
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user: null,
-      users: mockUsers,
+      token: null,
+      users: [],
       isAuthenticated: false,
 
-      login: (username, role) => {
-        const users = get().users;
-        let found = users.find((u) => u.username === username);
-        if (role && found && found.role !== role) {
-          found = users.find((u) => u.username === username && u.role === role) || found;
-        }
-        if (found) {
-          set({ user: found, isAuthenticated: true });
+      login: async (username, password, role) => {
+        try {
+          const response = await auth.login(username, password, role);
+          set({
+            user: response.user as User,
+            token: response.token,
+            isAuthenticated: true,
+          });
           return true;
+        } catch {
+          return false;
         }
-        return false;
       },
 
-      logout: () => {
-        set({ user: null, isAuthenticated: false });
+      logout: async () => {
+        try {
+          await auth.logout();
+        } catch {
+        }
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+        });
+      },
+
+      getCurrentUser: async () => {
+        try {
+          const user = await auth.getCurrentUser();
+          set({ user: user as User, isAuthenticated: true });
+          return user as User;
+        } catch {
+          set({ user: null, isAuthenticated: false });
+          return null;
+        }
       },
 
       switchRole: (role) => {
@@ -69,6 +92,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'edu-auth-storage',
+      partialize: (state) => ({ user: state.user, token: state.token, isAuthenticated: state.isAuthenticated }),
     }
   )
 );

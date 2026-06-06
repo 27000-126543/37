@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   UserCheck,
   Clock,
@@ -18,8 +18,8 @@ import {
   Hourglass,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { useAuthStore } from '@/store';
-import { mockApplications, mockUsers } from '@/data';
+import { useAuthStore, useAppStore } from '@/store';
+import { mockUsers } from '@/data';
 import type { CourseApplication } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -49,6 +49,7 @@ const statusLabelMap: Record<string, { label: string; color: string }> = {
 
 export default function TeacherAudit() {
   const { user } = useAuthStore();
+  const { fetchApplications, applications } = useAppStore();
   const [activeTab, setActiveTab] = useState<AuditTab>('pending_dean');
   const [selectedApp, setSelectedApp] = useState<CourseApplication | null>(null);
   const [applyModalOpen, setApplyModalOpen] = useState(false);
@@ -64,23 +65,27 @@ export default function TeacherAudit() {
     qualifications: '',
   });
 
+  useEffect(() => {
+    fetchApplications();
+  }, [fetchApplications]);
+
   const isTeacher = user?.role === 'teacher' || user?.role === 'lecturer';
   const isDean = user?.role === 'dean' || user?.role === 'admin';
 
   const getApplications = (tab: AuditTab) => {
     switch (tab) {
       case 'pending_dean':
-        return mockApplications.filter((a) => a.status === 'pending_dean' || a.status === 'pending_first_review');
+        return applications.filter((a) => a.status === 'pending_dean' || a.status === 'pending_first_review');
       case 'pending_expert':
-        return mockApplications.filter((a) => a.status === 'pending_expert' || a.status === 'first_review_passed');
+        return applications.filter((a) => a.status === 'pending_expert' || a.status === 'first_review_passed');
       case 'approved':
-        return mockApplications.filter((a) => a.status === 'approved' || a.status === 'final_review_passed');
+        return applications.filter((a) => a.status === 'approved' || a.status === 'final_review_passed');
       case 'rejected':
-        return mockApplications.filter(
+        return applications.filter(
           (a) => a.status === 'rejected' || a.status === 'first_review_rejected' || a.status === 'final_review_rejected',
         );
       case 'overdue':
-        return mockApplications.filter((a) => a.status === 'overdue');
+        return applications.filter((a) => a.status === 'overdue');
       default:
         return [];
     }

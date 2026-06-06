@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Award,
   CheckCircle,
@@ -15,8 +15,8 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { useAuthStore } from '@/store';
-import { mockCertificates, mockUsers, mockCourses } from '@/data';
+import { useAuthStore, useAppStore } from '@/store';
+import { mockUsers, mockCourses } from '@/data';
 import type { Certificate } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +28,7 @@ const statusMap = {
 
 export default function CertificateList() {
   const { user } = useAuthStore();
+  const { fetchCertificates, certificates } = useAppStore();
   const [activeTab, setActiveTab] = useState<'mine' | 'audit'>('mine');
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
   const [auditModalOpen, setAuditModalOpen] = useState(false);
@@ -35,10 +36,14 @@ export default function CertificateList() {
   const [auditRemark, setAuditRemark] = useState('');
   const [searchText, setSearchText] = useState('');
 
+  useEffect(() => {
+    fetchCertificates();
+  }, [fetchCertificates]);
+
   const isDean = user?.role === 'dean' || user?.role === 'admin';
 
-  const myCertificates = mockCertificates.filter((c) => c.userId === user?.id);
-  const auditCertificates = mockCertificates.filter((c) => c.auditStatus === 'pending');
+  const myCertificates = certificates.filter((c) => c.userId === user?.id);
+  const auditCertificates = certificates.filter((c) => c.auditStatus === 'pending');
 
   const displayList = activeTab === 'mine' ? myCertificates : auditCertificates;
   const filteredList = displayList.filter(
