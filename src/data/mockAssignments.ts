@@ -1,0 +1,147 @@
+import type { Assignment, AssignmentSubmission, GradingStatus } from '@/types';
+
+export const mockAssignments: Assignment[] = [
+  {
+    id: 'a001',
+    courseId: 'c001',
+    chapterId: 'ch001-1',
+    title: 'Python基础语法练习',
+    description: '完成变量、数据类型、运算符相关的练习题，巩固第一章学习内容。',
+    questions: [
+      { questionId: 'q001-1', order: 1 },
+      { questionId: 'q001-2', order: 2 },
+      { questionId: 'q001-3', order: 3 },
+    ],
+    deadline: '2025-06-20T23:59:59Z',
+    totalScore: 20,
+    createdAt: '2025-05-20T10:00:00Z',
+  },
+  {
+    id: 'a002',
+    courseId: 'c001',
+    chapterId: 'ch001-3',
+    title: '面向对象编程作业',
+    description: '编写一个学生管理系统，实现类的定义、继承、封装等面向对象特性。',
+    questions: [
+      { questionId: 'q001-6', order: 1 },
+    ],
+    deadline: '2025-06-30T23:59:59Z',
+    totalScore: 25,
+    createdAt: '2025-05-25T14:00:00Z',
+  },
+  {
+    id: 'a003',
+    courseId: 'c002',
+    chapterId: 'ch002-2',
+    title: '数据清洗实战',
+    description: '使用Pandas对提供的数据集进行完整的数据清洗流程。',
+    questions: [
+      { questionId: 'q002-3', order: 1 },
+    ],
+    deadline: '2025-06-25T23:59:59Z',
+    totalScore: 20,
+    createdAt: '2025-05-22T09:00:00Z',
+  },
+  {
+    id: 'a004',
+    courseId: 'c003',
+    chapterId: 'ch003-2',
+    title: 'Figma组件设计练习',
+    description: '设计一套完整的移动端电商App组件库，包含按钮、卡片、表单等核心组件。',
+    questions: [
+      { questionId: 'q003-4', order: 1 },
+    ],
+    deadline: '2025-07-05T23:59:59Z',
+    totalScore: 20,
+    createdAt: '2025-05-28T16:00:00Z',
+  },
+];
+
+const gradingStatusPending: GradingStatus = 'pending';
+const gradingStatusAssistantGraded: GradingStatus = 'assistant_graded';
+
+export const mockAssignmentSubmissions: AssignmentSubmission[] = [
+  {
+    id: 'as001',
+    assignmentId: 'a001',
+    studentId: 'u007',
+    userId: 'u007',
+    answers: [
+      { questionId: 'q001-1', score: 5, studentAnswer: 'C', isCorrect: true, studentScore: 5, gradingStatus: 'auto_graded' as GradingStatus },
+      { questionId: 'q001-2', score: 10, studentAnswer: ['A', 'B', 'D'], isCorrect: true, studentScore: 10, gradingStatus: 'auto_graded' as GradingStatus },
+      { questionId: 'q001-3', score: 5, studentAnswer: '正确', isCorrect: true, studentScore: 5, gradingStatus: 'auto_graded' as GradingStatus },
+    ],
+    answerMap: {
+      'q001-1': 'C',
+      'q001-2': ['A', 'B', 'D'],
+      'q001-3': '正确',
+    },
+    submittedAt: '2025-06-10T15:30:00Z',
+    autoScore: 20,
+    assistantScore: 0,
+    teacherScore: 0,
+    objectiveScore: 20,
+    totalScore: 20,
+    maxScore: 20,
+    gradingStatus: gradingStatusAssistantGraded,
+    isEscalated: false,
+    isPassed: true,
+    graderId: 'u005',
+    gradedAt: '2025-06-11T09:00:00Z',
+  },
+  {
+    id: 'as002',
+    assignmentId: 'a001',
+    studentId: 'u008',
+    userId: 'u008',
+    answers: [
+      { questionId: 'q001-1', score: 5, studentAnswer: 'A', isCorrect: false, studentScore: 0, gradingStatus: 'auto_graded' as GradingStatus },
+      { questionId: 'q001-2', score: 10, studentAnswer: ['A', 'B'], isCorrect: false, studentScore: 0, gradingStatus: 'auto_graded' as GradingStatus },
+      { questionId: 'q001-3', score: 5, studentAnswer: '错误', isCorrect: false, studentScore: 0, gradingStatus: 'auto_graded' as GradingStatus },
+    ],
+    answerMap: {
+      'q001-1': 'A',
+      'q001-2': ['A', 'B'],
+      'q001-3': '错误',
+    },
+    submittedAt: '2025-06-12T18:45:00Z',
+    autoScore: 0,
+    assistantScore: 5,
+    teacherScore: 0,
+    objectiveScore: 0,
+    subjectiveScore: 5,
+    totalScore: 5,
+    maxScore: 20,
+    gradingStatus: gradingStatusAssistantGraded,
+    isEscalated: false,
+    isPassed: false,
+    graderId: 'u005',
+    gradedAt: '2025-06-13T10:00:00Z',
+  },
+  {
+    id: 'as003',
+    assignmentId: 'a002',
+    studentId: 'u007',
+    userId: 'u007',
+    answers: [
+      {
+        questionId: 'q001-6',
+        score: 25,
+        studentAnswer: 'def bubble_sort(arr):\n    n = len(arr)\n    for i in range(n):\n        for j in range(0, n-i-1):\n            if arr[j] > arr[j+1]:\n                arr[j], arr[j+1] = arr[j+1], arr[j]\n    return arr',
+        gradingStatus: gradingStatusPending,
+      },
+    ],
+    answerMap: {
+      'q001-6': 'def bubble_sort(arr):\n    n = len(arr)\n    for i in range(n):\n        for j in range(0, n-i-1):\n            if arr[j] > arr[j+1]:\n                arr[j], arr[j+1] = arr[j+1], arr[j]\n    return arr',
+    },
+    submittedAt: '2025-06-15T12:00:00Z',
+    autoScore: 0,
+    assistantScore: 0,
+    teacherScore: 0,
+    objectiveScore: 0,
+    totalScore: 0,
+    maxScore: 25,
+    gradingStatus: gradingStatusPending,
+    isEscalated: false,
+  },
+];
