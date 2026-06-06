@@ -6,7 +6,7 @@ export type CourseStatus = 'draft' | 'published' | 'archived' | 'online' | 'pend
 
 export type CoursewareType = 'video' | 'pdf' | 'ppt' | 'doc';
 
-export type AssignmentStatus = 'not_started' | 'in_progress' | 'submitted' | 'grading' | 'graded' | 'overdue';
+export type AssignmentStatus = 'not_started' | 'in_progress' | 'submitted' | 'grading' | 'graded' | 'overdue' | 'pending_grader' | 'pending_teacher_review';
 
 export type GradingStatus = 'pending' | 'assistant_graded' | 'teacher_graded' | 'auto_graded' | 'needs_review';
 

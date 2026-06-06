@@ -8,6 +8,7 @@ import certificatesRoutes from './certificates.routes.js';
 import teachersRoutes from './teachers.routes.js';
 import analyticsRoutes from './analytics.routes.js';
 import dashboardRoutes from './dashboard.routes.js';
+import { liveRouter, danmakuRouter } from './live.routes.js';
 
 const router = Router();
 
@@ -23,5 +24,7 @@ router.use('/applications', teachersRoutes);
 router.use('/teachers', teachersRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/live', liveRouter);
+router.use('/danmakus', danmakuRouter);
 
 export default router;

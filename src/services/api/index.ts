@@ -7,6 +7,7 @@ import * as certificates from './modules/certificates';
 import * as teachers from './modules/teachers';
 import * as dashboard from './modules/dashboard';
 import * as analytics from './modules/analytics';
+import * as live from './modules/live';
 
 export { default as client } from './client';
 export type { ApiResponse, PaginatedResult } from './client';
@@ -21,4 +22,5 @@ export {
   teachers,
   dashboard,
   analytics,
+  live,
 };

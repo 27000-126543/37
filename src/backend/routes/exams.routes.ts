@@ -296,32 +296,110 @@ examsRouter.post('/:id/start', requireRole('student'), (req: Request, res: Respo
     return;
   }
 
-  let examQuestions = db
+  const targetCount = Math.max(exam.questionCount, 0);
+
+  const examAssocQuestions = db
     .prepare('SELECT * FROM exam_questions WHERE examId = ? ORDER BY RANDOM()')
     .all(id) as DbExamQuestion[];
 
-  const needed = exam.questionCount - examQuestions.length;
-  if (needed > 0) {
-    const poolQuestions = db
-      .prepare('SELECT * FROM questions WHERE courseId = ? ORDER BY RANDOM() LIMIT ?')
-      .all(exam.courseId, needed) as DbQuestion[];
+  let selectedQuestions: DbExamQuestion[] = [];
 
-    for (const pq of poolQuestions) {
-      const eqId = uuidv4();
-      db.prepare(`
-        INSERT INTO exam_questions (id, examId, type, content, options, answer, score)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(eqId, id, pq.type, pq.content, pq.options || null, pq.answer, pq.score || 0);
+  if (targetCount === 0 || examAssocQuestions.length >= targetCount) {
+    selectedQuestions = targetCount > 0
+      ? examAssocQuestions.slice(0, targetCount)
+      : examAssocQuestions;
+  } else {
+    selectedQuestions = [...examAssocQuestions];
+    const needed = targetCount - selectedQuestions.length;
+
+    const typeCounts = new Map<string, number>();
+    for (const q of selectedQuestions) {
+      typeCounts.set(q.type, (typeCounts.get(q.type) || 0) + 1);
     }
 
-    examQuestions = db
-      .prepare('SELECT * FROM exam_questions WHERE examId = ? ORDER BY RANDOM()')
-      .all(id) as DbExamQuestion[];
-  }
+    const totalSelected = selectedQuestions.length;
+    const typeRatios = new Map<string, number>();
+    for (const [type, count] of typeCounts.entries()) {
+      typeRatios.set(type, count / totalSelected);
+    }
 
-  const selectedQuestions = exam.questionCount > 0
-    ? examQuestions.slice(0, exam.questionCount)
-    : examQuestions;
+    const coursePoolQuestions = db
+      .prepare('SELECT * FROM questions WHERE courseId = ?')
+      .all(exam.courseId) as DbQuestion[];
+
+    const poolByType = new Map<string, DbQuestion[]>();
+    for (const pq of coursePoolQuestions) {
+      if (!poolByType.has(pq.type)) {
+        poolByType.set(pq.type, []);
+      }
+      poolByType.get(pq.type)!.push(pq);
+    }
+
+    const selectedIdsFromPool = new Set<string>();
+    for (const q of selectedQuestions) {
+      selectedIdsFromPool.add(`${q.type}-${q.content}`);
+    }
+
+    let remaining = needed;
+    const typeOrder = Array.from(typeRatios.entries()).sort((a, b) => b[1] - a[1]);
+    const allTypes = Array.from(new Set([...poolByType.keys(), ...typeRatios.keys()]));
+
+    for (const [type, ratio] of typeOrder) {
+      if (remaining <= 0) break;
+      const targetForType = Math.max(1, Math.ceil(needed * ratio));
+      const pool = (poolByType.get(type) || []).filter(pq => !selectedIdsFromPool.has(`${pq.type}-${pq.content}`));
+
+      for (let i = 0; i < Math.min(targetForType, pool.length, remaining); i++) {
+        const pq = pool[i];
+        const eqId = uuidv4();
+        db.prepare(`
+          INSERT INTO exam_questions (id, examId, type, content, options, answer, score)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(eqId, id, pq.type, pq.content, pq.options || null, pq.answer, pq.score || 0);
+
+        selectedQuestions.push({
+          id: eqId,
+          examId: id,
+          type: pq.type,
+          content: pq.content,
+          options: pq.options || null,
+          answer: pq.answer,
+          score: pq.score || 0,
+        });
+        selectedIdsFromPool.add(`${pq.type}-${pq.content}`);
+        remaining--;
+      }
+    }
+
+    if (remaining > 0) {
+      for (const type of allTypes) {
+        if (remaining <= 0) break;
+        const pool = (poolByType.get(type) || []).filter(pq => !selectedIdsFromPool.has(`${pq.type}-${pq.content}`));
+        for (let i = 0; i < Math.min(pool.length, remaining); i++) {
+          const pq = pool[i];
+          const eqId = uuidv4();
+          db.prepare(`
+            INSERT INTO exam_questions (id, examId, type, content, options, answer, score)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).run(eqId, id, pq.type, pq.content, pq.options || null, pq.answer, pq.score || 0);
+
+          selectedQuestions.push({
+            id: eqId,
+            examId: id,
+            type: pq.type,
+            content: pq.content,
+            options: pq.options || null,
+            answer: pq.answer,
+            score: pq.score || 0,
+          });
+          selectedIdsFromPool.add(`${pq.type}-${pq.content}`);
+          remaining--;
+        }
+      }
+    }
+
+    selectedQuestions.sort(() => Math.random() - 0.5);
+  }
 
   const attemptId = uuidv4();
   const now = new Date().toISOString();

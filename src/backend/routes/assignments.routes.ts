@@ -170,6 +170,7 @@ assignmentsRouter.get('/', (req: Request, res: Response): void => {
 
 assignmentsRouter.get('/:id', (req: Request, res: Response): void => {
   const { id } = req.params as { id: string };
+  const user = req.user;
 
   const assignment = db
     .prepare('SELECT id, courseId, title, description, deadline, createdAt FROM assignments WHERE id = ?')
@@ -184,9 +185,25 @@ assignmentsRouter.get('/:id', (req: Request, res: Response): void => {
     .prepare('SELECT id, assignmentId, type, content, options, answer, score FROM assignment_questions WHERE assignmentId = ? ORDER BY rowid')
     .all(id) as DbAssignmentQuestion[];
 
+  let escalatedSubmissions: AssignmentSubmission[] = [];
+  if (user && user.role === 'teacher') {
+    const course = db.prepare('SELECT teacherId FROM courses WHERE id = ?').get(assignment.courseId) as { teacherId: string } | undefined;
+    if (course && course.teacherId === user.id) {
+      const rows = db
+        .prepare(`
+          SELECT * FROM assignment_submissions
+          WHERE assignmentId = ? AND escalatedAt IS NOT NULL
+          ORDER BY escalatedAt DESC
+        `)
+        .all(id) as DbAssignmentSubmission[];
+      escalatedSubmissions = rows.map(formatSubmission);
+    }
+  }
+
   const result = {
     ...formatAssignment(assignment),
     questions: questions.map(formatQuestion),
+    escalatedSubmissions,
   };
 
   res.json(success(result));
@@ -443,6 +460,10 @@ submissionsRouter.put('/:id/grade', requireMinRole(ROLE_LEVELS.assistant), (req:
     return;
   }
 
+  const assignment = db
+    .prepare('SELECT courseId FROM assignments WHERE id = ?')
+    .get(submission.assignmentId) as { courseId: string } | undefined;
+
   const now = new Date().toISOString();
   const totalScore = submission.objectiveScore + (body.subjectiveScore || 0);
   const submittedAt = new Date(submission.submittedAt).getTime();
@@ -452,17 +473,36 @@ submissionsRouter.put('/:id/grade', requireMinRole(ROLE_LEVELS.assistant), (req:
   const isAssistant = req.user.role === 'assistant';
   const shouldEscalate = isAssistant && hoursDiff > 48;
 
+  let finalStatus = 'graded';
+  let finalGraderId: string | null = req.user.id;
+  let escalatedAt: string | null = null;
+
+  if (shouldEscalate && assignment) {
+    const course = db.prepare('SELECT teacherId FROM courses WHERE id = ?').get(assignment.courseId) as { teacherId: string | null } | undefined;
+    if (course && course.teacherId) {
+      finalStatus = 'pending_teacher_review';
+      finalGraderId = course.teacherId;
+      escalatedAt = now;
+    } else {
+      escalatedAt = now;
+    }
+  }
+
   db.prepare(`
     UPDATE assignment_submissions
-    SET subjectiveScore = ?, totalScore = ?, gradedAt = ?, graderId = ?, status = 'graded', escalatedAt = ?
+    SET subjectiveScore = ?, totalScore = ?, gradedAt = ?, graderId = ?, status = ?, escalatedAt = ?
     WHERE id = ?
-  `).run(body.subjectiveScore || 0, totalScore, now, req.user.id, shouldEscalate ? now : null, id);
+  `).run(body.subjectiveScore || 0, totalScore, now, finalGraderId, finalStatus, escalatedAt, id);
 
   const updated = db
     .prepare('SELECT * FROM assignment_submissions WHERE id = ?')
     .get(id) as DbAssignmentSubmission;
 
-  res.json(success(formatSubmission(updated), '批改成功'));
+  const msg = shouldEscalate
+    ? '批改完成，因超48小时已自动升级给课程讲师复核'
+    : '批改成功';
+
+  res.json(success(formatSubmission(updated), msg));
 });
 
 submissionsRouter.get('/pending-escalation', requireMinRole(ROLE_LEVELS.dean), (_req: Request, res: Response): void => {
@@ -480,6 +520,29 @@ submissionsRouter.get('/pending-escalation', requireMinRole(ROLE_LEVELS.dean), (
 
   const submissions = rows.map(formatSubmission);
   res.json(success(submissions));
+});
+
+submissionsRouter.get('/my-escalated', requireRole('teacher'), (req: Request, res: Response): void => {
+  if (!req.user) {
+    res.status(401).json(error('用户未认证', 401));
+    return;
+  }
+
+  const rows = db
+    .prepare(`
+      SELECT s.*
+      FROM assignment_submissions s
+      INNER JOIN assignments a ON s.assignmentId = a.id
+      INNER JOIN courses c ON a.courseId = c.id
+      WHERE s.status = 'pending_teacher_review'
+        AND s.escalatedAt IS NOT NULL
+        AND (s.graderId = ? OR c.teacherId = ?)
+      ORDER BY s.escalatedAt ASC
+    `)
+    .all(req.user.id, req.user.id) as DbAssignmentSubmission[];
+
+  const submissions = rows.map(formatSubmission);
+  res.json(success(submissions, '待我升级批改列表'));
 });
 
 export { assignmentsRouter, submissionsRouter };

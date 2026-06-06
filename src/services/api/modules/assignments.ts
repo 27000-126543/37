@@ -137,3 +137,10 @@ export const getPendingEscalations = async (): Promise<AssignmentSubmission[]> =
   );
   return response.data;
 };
+
+export const getMyEscalatedSubmissions = async (): Promise<AssignmentSubmission[]> => {
+  const response = await client.get<unknown, ApiResponse<AssignmentSubmission[]>>(
+    '/submissions/my-escalated'
+  );
+  return response.data;
+};

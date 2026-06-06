@@ -30,7 +30,7 @@ export type CoursewareType = 'video' | 'pdf' | 'ppt' | 'doc';
 /**
  * 作业状态枚举
  */
-export type AssignmentStatus = 'not_started' | 'in_progress' | 'submitted' | 'grading' | 'graded' | 'overdue';
+export type AssignmentStatus = 'not_started' | 'in_progress' | 'submitted' | 'grading' | 'graded' | 'overdue' | 'pending_grader' | 'pending_teacher_review';
 
 /**
  * 批改状态枚举
@@ -369,6 +369,7 @@ export interface Assignment {
   createdBy?: string;
   createdAt: string;
   submissions?: AssignmentSubmission[];
+  escalatedSubmissions?: AssignmentSubmission[];
 }
 
 /**

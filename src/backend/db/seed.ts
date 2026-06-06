@@ -694,6 +694,105 @@ const insertApplicationsTx = db.transaction((list: SeedCourseApplication[]) => {
 insertApplicationsTx(applications);
 incrementStat('course_applications', applications.length);
 
+console.log('[Seed] 正在插入直播会话与弹幕数据...');
+interface SeedLiveSession {
+  id: string;
+  courseId: string;
+  title: string;
+  startTime: string | null;
+  endTime: string | null;
+  status: string;
+  recordingUrl: string | null;
+}
+
+interface SeedDanmaku {
+  id: string;
+  liveSessionId: string;
+  userId: string;
+  content: string;
+  isBlocked: number;
+  blockReason: string | null;
+  createdAt: string;
+}
+
+const liveSessions: SeedLiveSession[] = [];
+const danmakus: SeedDanmaku[] = [];
+
+const liveStatuses: Array<'not_started' | 'live' | 'ended'> = ['live', 'ended', 'not_started', 'ended', 'live'];
+const liveTitles = [
+  'Python环境搭建与基础语法直播',
+  '数据可视化实战讲解',
+  'UI设计规范与实战',
+  '项目管理核心工具演示',
+  '网络安全渗透测试入门'
+];
+
+for (let li = 0; li < courses.length; li++) {
+  const course = courses[li];
+  const liveId = uuidv4();
+  const start = new Date();
+  start.setHours(start.getHours() - li * 2);
+  const end = liveStatuses[li] === 'ended' ? new Date(start.getTime() + 2 * 60 * 60 * 1000) : null;
+
+  liveSessions.push({
+    id: liveId,
+    courseId: course.id,
+    title: liveTitles[li],
+    startTime: start.toISOString(),
+    endTime: end ? end.toISOString() : null,
+    status: liveStatuses[li],
+    recordingUrl: liveStatuses[li] === 'ended' ? `https://cdn.vocedu.com/recordings/${liveId}.mp4` : null,
+  });
+
+  const danmakuTexts = [
+    '老师讲得真清楚！',
+    '这个案例太棒了',
+    '请问刚才那段代码可以再看一遍吗？',
+    '666',
+    '学到了，谢谢老师',
+    '这个知识点考试会考吗？',
+    '已收藏，回去复习',
+    '请问有没有配套的练习？',
+    '终于搞懂了！',
+    '老师语速刚好，点赞'
+  ];
+
+  for (let di = 0; di < 10; di++) {
+    const d = new Date(start.getTime() + di * 60 * 1000);
+    const isBlocked = di === 3;
+    danmakus.push({
+      id: uuidv4(),
+      liveSessionId: liveId,
+      userId: studentIds[di % studentIds.length],
+      content: isBlocked ? '这个老师讲得真垃圾' : danmakuTexts[di],
+      isBlocked: isBlocked ? 1 : 0,
+      blockReason: isBlocked ? '包含敏感词：垃圾' : null,
+      createdAt: d.toISOString(),
+    });
+  }
+}
+
+const insertLiveSession = db.prepare(`
+  INSERT INTO live_sessions (id, courseId, title, startTime, endTime, status, recordingUrl)
+  VALUES (@id, @courseId, @title, @startTime, @endTime, @status, @recordingUrl)
+`);
+const insertDanmaku = db.prepare(`
+  INSERT INTO danmakus (id, liveSessionId, userId, content, isBlocked, blockReason, createdAt)
+  VALUES (@id, @liveSessionId, @userId, @content, @isBlocked, @blockReason, @createdAt)
+`);
+
+const insertLiveSessionsTx = db.transaction((list: SeedLiveSession[]) => {
+  for (const s of list) insertLiveSession.run(s);
+});
+insertLiveSessionsTx(liveSessions);
+incrementStat('live_sessions', liveSessions.length);
+
+const insertDanmakusTx = db.transaction((list: SeedDanmaku[]) => {
+  for (const d of list) insertDanmaku.run(d);
+});
+insertDanmakusTx(danmakus);
+incrementStat('danmakus', danmakus.length);
+
 closeDb();
 
 console.log('\n========================================');
